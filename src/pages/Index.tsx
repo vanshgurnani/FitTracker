@@ -2,7 +2,7 @@ import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { BarChart3, Target, Sparkles, Users, TrendingUp } from "lucide-react";
+import { BarChart3, Target, Sparkles, Users, TrendingUp, UserPlus, ClipboardList, BrainCircuit, LineChart } from "lucide-react";
 
 const Index = () => {
   return (
@@ -68,6 +68,57 @@ const Index = () => {
               </CardDescription>
             </CardHeader>
           </Card>
+        </div>
+
+        {/* How It Works Section */}
+        <div className="mt-16 text-center">
+          <h2 className="text-3xl font-bold mb-8">How It Works</h2>
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-8 text-left">
+            <Card>
+              <CardHeader className="items-center">
+                <div className="bg-gradient-to-r from-primary to-accent p-3 rounded-full w-fit mb-4">
+                  <UserPlus className="h-6 w-6 text-white" />
+                </div>
+                <CardTitle>1. Sign Up / Sign In</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p>Create an account or sign in to access your personalized dashboard.</p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader className="items-center">
+                <div className="bg-gradient-to-r from-primary to-accent p-3 rounded-full w-fit mb-4">
+                  <ClipboardList className="h-6 w-6 text-white" />
+                </div>
+                <CardTitle>2. Log Your Meals & Workouts</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p>Use natural language to log your meals and exercises. For example, "I had a chicken salad for lunch" or "I ran 3 miles in 30 minutes".</p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader className="items-center">
+                <div className="bg-gradient-to-r from-primary to-accent p-3 rounded-full w-fit mb-4">
+                  <BrainCircuit className="h-6 w-6 text-white" />
+                </div>
+                <CardTitle>3. AI-Powered Analysis</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p>Our AI will analyze your logs, track your calories, and provide insights.</p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader className="items-center">
+                <div className="bg-gradient-to-r from-primary to-accent p-3 rounded-full w-fit mb-4">
+                  <LineChart className="h-6 w-6 text-white" />
+                </div>
+                <CardTitle>4. Track Your Progress</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p>Visualize your progress with intuitive charts and get AI-powered recommendations for better results.</p>
+              </CardContent>
+            </Card>
+          </div>
         </div>
       </div>
     </div>

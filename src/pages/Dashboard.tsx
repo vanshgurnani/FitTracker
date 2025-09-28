@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, forwardRef } from "react";
+import { useState, useEffect, useRef, forwardRef, useMemo } from "react";
 import { Link } from "react-router-dom";
 import {
   Card,
@@ -12,7 +12,7 @@ import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import Navigation from "@/components/Navigation";
 import { useAuth } from "@/contexts/AuthContext";
-import { supabase, FoodLog, ExerciseLog } from "@/lib/supabase";
+import { supabase, FoodLog, ExerciseLog, User } from "@/lib/supabase";
 import {
   CalendarDays,
   Target,
@@ -25,13 +25,15 @@ import {
 import { DatePicker } from "@/components/ui/date-picker";
 import { format } from "date-fns";
 import html2canvas from "html2canvas";
+import NutrientGoals from "@/components/NutrientGoals";
+import { calculateNutrientGoals } from "@/lib/utils";
 
 // This component is rendered off-screen and used to generate the shareable image.
 const ShareCard = forwardRef<
   HTMLDivElement,
   {
     date: Date | undefined;
-    user: { full_name?: string } | null;
+    user: Partial<User> | null;
     stats: {
       consumed: number;
       burned: number;
@@ -39,8 +41,18 @@ const ShareCard = forwardRef<
       dailyGoal: number;
       remaining: number;
     };
+    nutrientGoals: {
+      proteinGoal: number;
+      carbsGoal: number;
+      fatGoal: number;
+    };
+    currentIntake: {
+      protein: number;
+      carbs: number;
+      fat: number;
+    };
   }
->(({ date, user, stats }, ref) => {
+>(({ date, user, stats, nutrientGoals, currentIntake }, ref) => {
   const dateString = date ? format(date, "PPP") : "Today";
 
   return (
@@ -72,6 +84,23 @@ const ShareCard = forwardRef<
         <div className="flex justify-between items-center border-t pt-3 mt-3">
           <span className="font-medium">Net Calories</span>
           <span className="font-bold">{stats.netCalories} kcal</span>
+        </div>
+      </div>
+      <div className="mt-6 border-t pt-4">
+        <h3 className="text-lg font-semibold mb-2">Macronutrients</h3>
+        <div className="space-y-2 text-sm">
+          <div className="flex justify-between">
+            <span>Protein</span>
+            <span>{currentIntake.protein.toFixed(0)}g / {nutrientGoals.proteinGoal}g</span>
+          </div>
+          <div className="flex justify-between">
+            <span>Carbs</span>
+            <span>{currentIntake.carbs.toFixed(0)}g / {nutrientGoals.carbsGoal}g</span>
+          </div>
+          <div className="flex justify-between">
+            <span>Fat</span>
+            <span>{currentIntake.fat.toFixed(0)}g / {nutrientGoals.fatGoal}g</span>
+          </div>
         </div>
       </div>
       <div className="mt-4 text-center text-sm text-muted-foreground">
@@ -153,6 +182,25 @@ const Dashboard = () => {
   const netCalories = consumed - burned;
   const remaining = dailyGoal - netCalories;
   const progressPercentage = Math.min((netCalories / dailyGoal) * 100, 100);
+
+  const nutrientGoals = useMemo(() => {
+    if (!userProfile) {
+      return { proteinGoal: 0, carbsGoal: 0, fatGoal: 0 };
+    }
+    return calculateNutrientGoals(userProfile);
+  }, [userProfile]);
+
+  const currentIntake = useMemo(() => {
+    return foodLogs.reduce(
+      (acc, log) => {
+        acc.protein += log.protein || 0;
+        acc.carbs += log.carbs || 0;
+        acc.fat += log.fat || 0;
+        return acc;
+      },
+      { protein: 0, carbs: 0, fat: 0 }
+    );
+  }, [foodLogs]);
 
   const recentActivity = [
     ...foodLogs.map((log) => ({ ...log, type: "food" as const })),
@@ -245,6 +293,8 @@ const Dashboard = () => {
         date={selectedDate}
         user={userProfile}
         stats={{ consumed, burned, netCalories, dailyGoal, remaining }}
+        nutrientGoals={nutrientGoals}
+        currentIntake={currentIntake}
       />
 
       <div className="container mx-auto px-4 py-8">
@@ -396,6 +446,8 @@ const Dashboard = () => {
                   </Button>
                 </CardContent>
               </Card>
+
+              <NutrientGoals foodLogs={foodLogs} userProfile={userProfile} />
 
               <Card className="lg:col-span-2">
                 <CardHeader>

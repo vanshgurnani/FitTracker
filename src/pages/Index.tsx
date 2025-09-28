@@ -82,7 +82,7 @@ const Index = () => {
                 <CardTitle>1. Sign Up / Sign In</CardTitle>
               </CardHeader>
               <CardContent>
-                <p>Create an account or sign in to access your personalized dashboard.</p>
+                <p>Create an account or sign in to access your personalized dashboard. When you create an account, check your email box to confirm your email address to login to the web app.</p>
               </CardContent>
             </Card>
             <Card>

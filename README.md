@@ -167,6 +167,18 @@ Where:
 
 The `daily_calorie_goal` stored in the `user_profiles` table is derived from this TDEE calculation, adjusted based on the user's specific weight management goals (e.g., calorie deficit for weight loss, surplus for weight gain).
 
+## 🥗 Micronutrient Calculation
+
+Micronutrient information (vitamins, minerals, etc.) is estimated by the Gemini AI based on the food descriptions you provide. When you log a meal, the AI analyzes the food items and provides an estimated breakdown of key micronutrients.
+
+The accuracy of this calculation depends on:
+
+-   **Specificity of the Description:** "1 cup of spinach" will yield more accurate results than "a salad."
+-   **AI Model Knowledge:** The AI's knowledge base is constantly updated, but it may not have detailed information on all food items.
+-   **Complex Meals:** For meals with many ingredients, the AI provides a best-effort aggregated estimate.
+
+This information is intended for general guidance and may not be 100% accurate. For precise dietary analysis, consult a registered dietitian or use a dedicated food tracking app with a verified food database.
+
 ## 🔐 Authentication & Security
 
 - **Supabase Auth**: Handles user registration, login, and session management

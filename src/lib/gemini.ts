@@ -22,10 +22,37 @@ export interface FoodAnalysisResult {
 }
 
 export const analyzeFoodDescription = async (description: string): Promise<FoodAnalysisResult> => {
+  // First, try the dedicated nutrition API
   try {
-    const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' })
+    console.log("Calling Nutrition API...");
+    const nutritionApiUrl = `https://food-model-chi.vercel.app/api/nutrition?description=${encodeURIComponent(description)}`;
+    const res = await fetch(nutritionApiUrl);
+    
+    if (!res.ok) {
+      throw new Error(`Nutrition API failed with status: ${res.status}`);
+    }
+    
+    const data = await res.json();
 
-    const prompt = `
+    // Validate required fields from the API
+    if (typeof data.calories !== 'number' || 
+        typeof data.protein !== 'number' ||
+        typeof data.carbs !== 'number' ||
+        typeof data.fat !== 'number') {
+      throw new Error('Invalid nutrition data from API');
+    }
+    
+    console.log("Nutrition API call successful.");
+    return data as FoodAnalysisResult;
+  } catch (error) {
+    console.warn('Nutrition API failed, falling back to Gemini:', error);
+
+    // Fallback to Gemini if the nutrition API fails
+    try {
+      console.log("Calling Gemini API for fallback...");
+      const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
+
+      const prompt = `
 Analyze the following food description and provide detailed nutritional information:
 
 "${description}"
@@ -59,39 +86,41 @@ Example response:
     "Brown rice (1/2 cup): 110 calories, 2g protein, 22g carbs"
   ]
 }
-`
+`;
 
-    const result = await model.generateContent(prompt)
-    const response = await result.response
-    const text = response.text()
-    
-    // Extract JSON from response
-    const jsonMatch = text.match(/\{[\s\S]*\}/)
-    if (!jsonMatch) {
-      throw new Error('Failed to parse AI response')
-    }
-    
-    const analysis = JSON.parse(jsonMatch[0]) as FoodAnalysisResult
-    
-    // Validate required fields
-    if (typeof analysis.calories !== 'number' || 
-        typeof analysis.protein !== 'number' ||
-        typeof analysis.carbs !== 'number' ||
-        typeof analysis.fat !== 'number') {
-      throw new Error('Invalid nutrition data from AI')
-    }
-    
-    return analysis
-  } catch (error) {
-    console.error('Food analysis error:', error)
-    // Fallback values
-    return {
-      calories: 300,
-      protein: 15,
-      carbs: 30,
-      fat: 10,
-      confidence: 50,
-      breakdown: ['Unable to analyze - using estimated values']
+      const result = await model.generateContent(prompt);
+      const response = await result.response;
+      const text = response.text();
+      
+      // Extract JSON from response
+      const jsonMatch = text.match(/\{[\s\S]*\}/);
+      if (!jsonMatch) {
+        throw new Error('Failed to parse AI response');
+      }
+      
+      const analysis = JSON.parse(jsonMatch[0]) as FoodAnalysisResult;
+      
+      // Validate required fields
+      if (typeof analysis.calories !== 'number' || 
+          typeof analysis.protein !== 'number' ||
+          typeof analysis.carbs !== 'number' ||
+          typeof analysis.fat !== 'number') {
+        throw new Error('Invalid nutrition data from AI');
+      }
+      
+      console.log("Gemini API fallback successful.");
+      return analysis;
+    } catch (geminiError) {
+      console.error('Food analysis error (Gemini fallback):', geminiError);
+      // Fallback values
+      return {
+        calories: 300,
+        protein: 15,
+        carbs: 30,
+        fat: 10,
+        confidence: 50,
+        breakdown: ['Unable to analyze - using estimated values']
+      };
     }
   }
 }

@@ -1,14 +1,16 @@
 import { GoogleGenerativeAI } from '@google/generative-ai'
 
 const apiKey = import.meta.env.VITE_GEMINI_API_KEY
-
 if (!apiKey) {
   throw new Error('Missing Gemini API key')
 }
 
 const genAI = new GoogleGenerativeAI(apiKey)
 
-// Food Analysis Service
+/* -------------------------------------------------------------------------- */
+/*                                FOOD ANALYSIS                               */
+/* -------------------------------------------------------------------------- */
+
 export interface FoodAnalysisResult {
   calories: number
   protein: number
@@ -21,111 +23,102 @@ export interface FoodAnalysisResult {
   breakdown: string[]
 }
 
-export const analyzeFoodDescription = async (description: string): Promise<FoodAnalysisResult> => {
-  // First, try the dedicated nutrition API
+export const analyzeFoodDescription = async (
+  description: string
+): Promise<FoodAnalysisResult> => {
   try {
-    console.log("Calling Nutrition API...");
-    const nutritionApiUrl = `https://food-model-chi.vercel.app/api/nutrition?description=${encodeURIComponent(description)}`;
-    const res = await fetch(nutritionApiUrl);
-    
-    if (!res.ok) {
-      throw new Error(`Nutrition API failed with status: ${res.status}`);
-    }
-    
-    const data = await res.json();
+    console.log('Analyzing food using Gemini...')
 
-    // Validate required fields from the API
-    if (typeof data.calories !== 'number' || 
-        typeof data.protein !== 'number' ||
-        typeof data.carbs !== 'number' ||
-        typeof data.fat !== 'number') {
-      throw new Error('Invalid nutrition data from API');
-    }
-    
-    console.log("Nutrition API call successful.");
-    return data as FoodAnalysisResult;
-  } catch (error) {
-    console.warn('Nutrition API failed, falling back to Gemini:', error);
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' })
 
-    // Fallback to Gemini if the nutrition API fails
-    try {
-      console.log("Calling Gemini API for fallback...");
-      const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
+    const prompt = `
+You are a professional dietitian and nutrition data analyst.
+Your task is to analyze the following food description and estimate its nutritional values.
 
-      const prompt = `
-Analyze the following food description and provide detailed nutritional information:
-
+Food description:
 "${description}"
 
-Please respond with a JSON object containing:
-- calories: estimated total calories (number)
-- protein: grams of protein (number) 
-- carbs: grams of carbohydrates (number)
-- fat: grams of fat (number)
-- fiber: grams of fiber (number, optional)
-- sugar: grams of sugar (number, optional) 
-- sodium: milligrams of sodium (number, optional)
-- confidence: confidence level 0-100 (number)
-- breakdown: array of strings explaining the analysis for each food item
+Instructions:
+1. Assume reasonable serving sizes if not specified.
+2. Use standard nutritional reference data (USDA/FDA-based).
+3. Provide a realistic calorie and macronutrient breakdown.
+4. Always respond ONLY with a valid JSON object (no text outside JSON).
 
-Be as accurate as possible based on standard nutritional data. If portions aren't specified, assume reasonable serving sizes.
-
-Example response:
+The JSON must contain:
 {
-  "calories": 450,
-  "protein": 35,
-  "carbs": 25,
-  "fat": 18,
-  "fiber": 8,
-  "sugar": 5,
-  "sodium": 650,
-  "confidence": 85,
+  "calories": number,
+  "protein": number,
+  "carbs": number,
+  "fat": number,
+  "fiber": number,
+  "sugar": number,
+  "sodium": number,
+  "confidence": number,
   "breakdown": [
-    "Grilled chicken breast (6oz): 280 calories, 30g protein",
-    "Steamed broccoli (1 cup): 25 calories, 3g protein, 5g carbs",
-    "Brown rice (1/2 cup): 110 calories, 2g protein, 22g carbs"
+    "Item: details of calories and macros per item"
   ]
 }
-`;
 
-      const result = await model.generateContent(prompt);
-      const response = await result.response;
-      const text = response.text();
-      
-      // Extract JSON from response
-      const jsonMatch = text.match(/\{[\s\S]*\}/);
-      if (!jsonMatch) {
-        throw new Error('Failed to parse AI response');
-      }
-      
-      const analysis = JSON.parse(jsonMatch[0]) as FoodAnalysisResult;
-      
-      // Validate required fields
-      if (typeof analysis.calories !== 'number' || 
-          typeof analysis.protein !== 'number' ||
-          typeof analysis.carbs !== 'number' ||
-          typeof analysis.fat !== 'number') {
-        throw new Error('Invalid nutrition data from AI');
-      }
-      
-      console.log("Gemini API fallback successful.");
-      return analysis;
-    } catch (geminiError) {
-      console.error('Food analysis error (Gemini fallback):', geminiError);
-      // Fallback values
-      return {
-        calories: 300,
-        protein: 15,
-        carbs: 30,
-        fat: 10,
-        confidence: 50,
-        breakdown: ['Unable to analyze - using estimated values']
-      };
+Example:
+{
+  "calories": 520,
+  "protein": 36,
+  "carbs": 40,
+  "fat": 22,
+  "fiber": 6,
+  "sugar": 8,
+  "sodium": 720,
+  "confidence": 90,
+  "breakdown": [
+    "Grilled chicken breast (6oz): 280 cal, 35g protein",
+    "Steamed broccoli (1 cup): 30 cal, 5g carbs, 3g protein",
+    "Olive oil (1 tsp): 40 cal, 4.5g fat",
+    "Brown rice (1/2 cup): 170 cal, 35g carbs, 3g protein"
+  ]
+}
+`
+
+    const result = await model.generateContent(prompt)
+    const response = await result.response
+    const text = response.text()
+
+    // Extract JSON from response
+    const jsonMatch = text.match(/\{[\s\S]*\}/)
+    if (!jsonMatch) {
+      throw new Error('Failed to parse AI JSON response')
+    }
+
+    const analysis = JSON.parse(jsonMatch[0]) as FoodAnalysisResult
+
+    // Validate essential fields
+    if (
+      typeof analysis.calories !== 'number' ||
+      typeof analysis.protein !== 'number' ||
+      typeof analysis.carbs !== 'number' ||
+      typeof analysis.fat !== 'number'
+    ) {
+      throw new Error('Incomplete nutrition data from AI')
+    }
+
+    console.log('Gemini food analysis successful.')
+    return analysis
+  } catch (error) {
+    console.error('Gemini food analysis error:', error)
+    return {
+      calories: 300,
+      protein: 15,
+      carbs: 30,
+      fat: 10,
+      confidence: 50,
+      breakdown: ['Unable to analyze precisely — using estimated average values']
     }
   }
 }
 
-// Exercise Analysis Service
+/* -------------------------------------------------------------------------- */
+/*                              EXERCISE ANALYSIS                             */
+/* -------------------------------------------------------------------------- */
+
 export interface ExerciseAnalysisResult {
   caloriesBurned: number
   exerciseType: 'cardio' | 'strength' | 'flexibility' | 'sports' | 'other'
@@ -136,43 +129,56 @@ export interface ExerciseAnalysisResult {
 }
 
 export const analyzeExerciseDescription = async (
-  description: string, 
+  description: string,
   duration?: number,
   userWeight?: number
 ): Promise<ExerciseAnalysisResult> => {
   try {
+    console.log('Analyzing exercise using Gemini...')
+
     const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' })
 
     const prompt = `
-Analyze the following exercise description and provide detailed information:
+You are a professional fitness trainer and exercise physiologist.
+Analyze the following exercise description and estimate energy expenditure.
 
+Exercise description:
 "${description}"
 ${duration ? `Duration: ${duration} minutes` : ''}
-${userWeight ? `User weight: ${userWeight} lbs` : 'Assume average weight of 150 lbs'}
+${userWeight ? `User weight: ${userWeight} lbs` : 'Assume average weight: 150 lbs'}
 
-Please respond with a JSON object containing:
-- caloriesBurned: estimated calories burned (number)
-- exerciseType: type of exercise - one of: "cardio", "strength", "flexibility", "sports", "other" 
-- intensity: intensity level - one of: "light", "moderate", "vigorous", "high"
-- confidence: confidence level 0-100 (number)
-- breakdown: array of strings explaining the calorie calculation
-- recommendations: optional array of improvement suggestions
+Instructions:
+- Base your calculation on standard MET values.
+- Respond ONLY with a valid JSON object.
+- Include calorie estimation, exercise type, and confidence.
 
-Base calorie calculations on standard MET values and the provided or assumed body weight.
+JSON format:
+{
+  "caloriesBurned": number,
+  "exerciseType": "cardio" | "strength" | "flexibility" | "sports" | "other",
+  "intensity": "light" | "moderate" | "vigorous" | "high",
+  "confidence": number,
+  "breakdown": [
+    "Explain how calories were calculated"
+  ],
+  "recommendations": [
+    "Optional advice for improvement"
+  ]
+}
 
-Example response:
+Example:
 {
   "caloriesBurned": 320,
   "exerciseType": "cardio",
-  "intensity": "moderate", 
+  "intensity": "moderate",
   "confidence": 90,
   "breakdown": [
-    "Running at moderate pace: 8 METs",
-    "30 minutes × 8 METs × 150 lbs = 320 calories"
+    "Running at moderate pace (8 METs)",
+    "30 mins × 8 METs × 150 lbs ≈ 320 cal"
   ],
   "recommendations": [
     "Great cardio workout! Try increasing pace gradually",
-    "Consider adding strength training 2x per week"
+    "Consider adding strength training twice a week"
   ]
 }
 `
@@ -180,70 +186,79 @@ Example response:
     const result = await model.generateContent(prompt)
     const response = await result.response
     const text = response.text()
-    
-    // Extract JSON from response
+
     const jsonMatch = text.match(/\{[\s\S]*\}/)
-    if (!jsonMatch) {
-      throw new Error('Failed to parse AI response')
-    }
-    
+    if (!jsonMatch) throw new Error('Failed to parse AI response')
+
     const analysis = JSON.parse(jsonMatch[0]) as ExerciseAnalysisResult
-    
-    // Validate required fields
-    if (typeof analysis.caloriesBurned !== 'number' ||
-        !['cardio', 'strength', 'flexibility', 'sports', 'other'].includes(analysis.exerciseType) ||
-        !['light', 'moderate', 'vigorous', 'high'].includes(analysis.intensity)) {
+
+    if (
+      typeof analysis.caloriesBurned !== 'number' ||
+      !['cardio', 'strength', 'flexibility', 'sports', 'other'].includes(
+        analysis.exerciseType
+      ) ||
+      !['light', 'moderate', 'vigorous', 'high'].includes(analysis.intensity)
+    ) {
       throw new Error('Invalid exercise data from AI')
     }
-    
+
+    console.log('Gemini exercise analysis successful.')
     return analysis
   } catch (error) {
     console.error('Exercise analysis error:', error)
-    // Fallback values
     return {
       caloriesBurned: duration ? Math.round(duration * 5) : 200,
       exerciseType: 'other',
       intensity: 'moderate',
       confidence: 50,
-      breakdown: ['Unable to analyze - using estimated values']
+      breakdown: ['Unable to analyze — using estimated average values']
     }
   }
 }
 
-// General AI Chat Service for fitness advice
-export const getFitnessAdvice = async (question: string, userContext?: {
-  age?: number
-  weight?: number
-  height?: number
-  fitnessGoal?: string
-  activityLevel?: string
-}): Promise<string> => {
+/* -------------------------------------------------------------------------- */
+/*                              GENERAL FITNESS CHAT                          */
+/* -------------------------------------------------------------------------- */
+
+export const getFitnessAdvice = async (
+  question: string,
+  userContext?: {
+    age?: number
+    weight?: number
+    height?: number
+    fitnessGoal?: string
+    activityLevel?: string
+  }
+): Promise<string> => {
   try {
     const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' })
 
-    const contextStr = userContext ? `
+    const contextStr = userContext
+      ? `
 User Context:
 - Age: ${userContext.age || 'Not specified'}
 - Weight: ${userContext.weight || 'Not specified'} lbs
-- Height: ${userContext.height || 'Not specified'} inches  
+- Height: ${userContext.height || 'Not specified'} inches
 - Fitness Goal: ${userContext.fitnessGoal || 'Not specified'}
 - Activity Level: ${userContext.activityLevel || 'Not specified'}
-` : ''
+`
+      : ''
 
     const prompt = `
-You are a helpful fitness and nutrition assistant. Answer the following question with accurate, personalized advice.
+You are a certified fitness and nutrition coach.
+Answer the following question with clear, evidence-based, and motivational advice.
 
 ${contextStr}
 
 Question: "${question}"
 
 Please provide:
-1. A clear, helpful answer
-2. Actionable recommendations
-3. Any important safety considerations
-4. Encouragement and motivation
+1. A clear and practical answer
+2. Actionable steps or recommendations
+3. Important safety considerations
+4. Encouragement or motivational note
 
-Keep the response concise but comprehensive (2-3 paragraphs maximum).
+Keep the response concise (2–3 short paragraphs max).
 `
 
     const result = await model.generateContent(prompt)

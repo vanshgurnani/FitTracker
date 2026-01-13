@@ -29,7 +29,7 @@ export const analyzeFoodDescription = async (
   try {
     console.log('Analyzing food using Gemini...')
 
-    const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' })
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' })
 
     const prompt = `
 You are a professional dietitian and nutrition data analyst.
@@ -231,7 +231,7 @@ export const getFitnessAdvice = async (
   }
 ): Promise<string> => {
   try {
-    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' })
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' })
 
     const contextStr = userContext
       ? `

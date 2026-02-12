@@ -1,15 +1,15 @@
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
-import { User } from "@/lib/supabase";
+import type { UserProfile } from "@/lib/types";
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
-export const calculateNutrientGoals = (user: Partial<User>) => {
-  const { age, gender, height, weight, activity_level, fitness_goal } = user;
+export const calculateNutrientGoals = (user: Partial<UserProfile>) => {
+  const { age, gender, height, weight, activityLevel, fitnessGoal } = user;
 
-  if (!age || !gender || !height || !weight || !activity_level || !fitness_goal) {
+  if (!age || !gender || !height || !weight || !activityLevel || !fitnessGoal) {
     return {
       tdee: 0,
       proteinGoal: 0,
@@ -18,8 +18,7 @@ export const calculateNutrientGoals = (user: Partial<User>) => {
     };
   }
 
-  // Convert weight to kg and height to cm if they are in pounds and inches
-  // Assuming weight is in kg and height is in cm as per the form
+  // UI stores weight in kg and height in cm.
   const weightInKg = Number(weight);
   const heightInCm = Number(height);
 
@@ -31,7 +30,7 @@ export const calculateNutrientGoals = (user: Partial<User>) => {
   }
 
   let activityMultiplier = 1.2;
-  switch (activity_level) {
+  switch (activityLevel) {
     case "light":
       activityMultiplier = 1.375;
       break;
@@ -49,7 +48,7 @@ export const calculateNutrientGoals = (user: Partial<User>) => {
   let tdee = bmr * activityMultiplier;
 
   // Adjust TDEE based on fitness goal
-  switch (fitness_goal) {
+  switch (fitnessGoal) {
     case "lose_weight":
       tdee -= 500; // Calorie deficit
       break;

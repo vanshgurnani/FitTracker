@@ -6,6 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAuth } from "@/contexts/AuthContext";
+import { useLocation } from "react-router-dom";
 import { toast } from "@/hooks/use-toast";
 
 const Login = () => {
@@ -16,9 +17,29 @@ const Login = () => {
   const [signupPassword, setSignupPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [fullName, setFullName] = useState("");
+  const [signupOtp, setSignupOtp] = useState("");
+  const [otpSending, setOtpSending] = useState(false);
   
-  const { signIn, signUp, user } = useAuth();
+  const { signIn, signUp, sendSignupOtp, signInWithToken, user } = useAuth();
   const navigate = useNavigate();
+
+  const location = useLocation();
+
+  // Handle token returned from Google OAuth redirect (as ?token=...)
+  React.useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const token = params.get("token");
+    if (token) {
+      (async () => {
+        const { error } = await signInWithToken(token);
+        if (!error) {
+          navigate("/dashboard", { replace: true });
+        } else {
+          console.error("Google sign-in token error:", error);
+        }
+      })();
+    }
+  }, [location.search, signInWithToken, navigate]);
 
   // Redirect if already logged in
   React.useEffect(() => {
@@ -54,7 +75,7 @@ const Login = () => {
 
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!signupEmail || !signupPassword || !confirmPassword) return;
+    if (!signupEmail || !signupPassword || !confirmPassword || !signupOtp) return;
     
     if (signupPassword !== confirmPassword) {
       toast({
@@ -76,23 +97,42 @@ const Login = () => {
     
     setIsLoading(true);
     
-    const { error } = await signUp(signupEmail, signupPassword, fullName);
+    const { error } = await signUp(signupEmail, signupPassword, signupOtp, fullName);
     
     if (error) {
       toast({
         title: "Sign up failed",
-        description: error.message,
+        description: error?.message || "Please try again.",
         variant: "destructive",
       });
     } else {
       toast({
         title: "Account created!",
-        description: "Please check your email to verify your account.",
+        description: "You've been successfully signed up.",
       });
       // User will be redirected automatically when auth state changes
     }
     
     setIsLoading(false);
+  };
+
+  const handleSendOtp = async () => {
+    if (!signupEmail) return;
+    setOtpSending(true);
+    const { error } = await sendSignupOtp(signupEmail);
+    if (error) {
+      toast({
+        title: "Failed to send OTP",
+        description: error?.message || "Please try again.",
+        variant: "destructive",
+      });
+    } else {
+      toast({
+        title: "OTP sent",
+        description: `OTP sent to ${signupEmail}.`,
+      });
+    }
+    setOtpSending(false);
   };
 
   return (
@@ -139,6 +179,12 @@ const Login = () => {
                 </div>
                 <Button type="submit" className="w-full" disabled={isLoading}>
                   {isLoading ? "Logging in..." : "Login"}
+                </Button>
+                <Button type="button" variant="outline" className="w-full" onClick={() => {
+                  // Open backend Google OAuth route
+                  window.open('/api/auth/google', '_self');
+                }}>
+                  Sign in with Google
                 </Button>
               </form>
             </TabsContent>
@@ -187,6 +233,27 @@ const Login = () => {
                     onChange={(e) => setConfirmPassword(e.target.value)}
                     required 
                   />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="signup-otp">OTP</Label>
+                  <div className="flex gap-2">
+                    <Input
+                      id="signup-otp"
+                      type="text"
+                      placeholder="Enter OTP"
+                      value={signupOtp}
+                      onChange={(e) => setSignupOtp(e.target.value)}
+                      required
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={handleSendOtp}
+                      disabled={otpSending || !signupEmail}
+                    >
+                      {otpSending ? "Sending..." : "Send OTP"}
+                    </Button>
+                  </div>
                 </div>
                 <Button type="submit" className="w-full" disabled={isLoading}>
                   {isLoading ? "Creating account..." : "Sign Up"}

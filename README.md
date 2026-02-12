@@ -1,22 +1,22 @@
 # FitTracker - AI-Powered Fitness Tracking App
 
-A modern fitness tracking application built with React, TypeScript, Supabase, and Google's Gemini AI. Track your meals and workouts with natural language descriptions and get AI-powered calorie calculations and insights.
+A modern fitness tracking application built with React, TypeScript, the FitTracker Node/Express backend, and Google's Gemini AI. Track your meals and workouts with natural language descriptions and get AI-powered calorie calculations and insights.
 
 ## 🚀 Features
 
 - **AI-Powered Food Analysis**: Describe what you ate in natural language and get detailed nutritional breakdowns
 - **Smart Exercise Logging**: Log workouts with AI calculating calories burned based on activity, duration, and intensity
 - **Real-time Dashboard**: Track daily progress with comprehensive stats and recent activity
-- **User Authentication**: Secure signup/login with Supabase Auth
+- **User Authentication**: Secure signup/login with JWT
 - **Personalized Goals**: Set and track daily calorie goals based on your profile
 - **Responsive Design**: Beautiful UI that works on all devices
-- **Data Persistence**: All data stored securely in Supabase PostgreSQL database
+- **Data Persistence**: All data stored in MongoDB via the FitTracker backend
 
 ## 🛠️ Tech Stack
 
 - **Frontend**: React 18, TypeScript, Vite
 - **UI Components**: Shadcn/ui, Tailwind CSS
-- **Backend**: Supabase (PostgreSQL, Auth, Real-time)
+- **Backend**: Node.js + Express + MongoDB (FitTracker_backend)
 - **AI Integration**: Google Gemini AI (gemini-1.5-flash)
 - **State Management**: React Context API, TanStack Query
 - **Routing**: React Router DOM
@@ -28,8 +28,7 @@ Before running this application, make sure you have:
 
 1. **Node.js** (v18 or higher)
 2. **npm** or **yarn** package manager
-3. **Supabase Account** - [Create one here](https://supabase.com)
-4. **Google AI Studio Account** - [Get API key here](https://makersuite.google.com/app/apikey)
+3. **Google AI Studio Account** - [Get API key here](https://makersuite.google.com/app/apikey)
 
 ## 🔧 Installation & Setup
 
@@ -52,29 +51,14 @@ cp .env.example .env
 Update `.env` with your actual values:
 
 ```env
-# Supabase Configuration
-VITE_SUPABASE_URL=https://your-project.supabase.co
-VITE_SUPABASE_ANON_KEY=your-supabase-anon-key
+# FitTracker Backend API
+VITE_API_BASE_URL=http://localhost:3000
 
 # Google Generative AI Configuration  
 VITE_GEMINI_API_KEY=your-gemini-api-key
 ```
 
-### 3. Supabase Database Setup
-
-1. Go to your Supabase project dashboard
-2. Navigate to the SQL Editor
-3. Run the SQL commands from `database-schema.sql` to create the required tables, policies, and triggers
-
-The schema includes:
-- `users` table (extends auth.users with profile data)
-- `food_logs` table (stores meal entries with AI analysis)
-- `exercise_logs` table (stores workout entries with AI analysis)
-- Row Level Security (RLS) policies
-- Helpful views for analytics
-- Automatic timestamp triggers
-
-### 4. Start the Development Server
+### 3. Start the Development Server
 
 ```bash
 npm run dev
@@ -93,7 +77,8 @@ src/
 │   └── AuthContext.tsx # Authentication state management
 ├── hooks/              # Custom React hooks
 ├── lib/                # Utility libraries
-│   ├── supabase.ts    # Supabase client & types
+│   ├── fittrackerApi.ts # Backend API client (JWT)
+│   ├── types.ts       # Shared app types
 │   ├── gemini.ts      # Gemini AI integration
 │   └── utils.ts       # General utilities
 ├── pages/              # Page components

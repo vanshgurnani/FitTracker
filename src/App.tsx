@@ -8,6 +8,7 @@ import ConfigCheck from "@/components/ConfigCheck";
 import Index from "./pages/Index";
 import Login from "./pages/Login";
 import Profile from "./pages/Profile";
+import ProfileView from "./pages/ProfileView";
 import Dashboard from "./pages/Dashboard";
 import FoodLog from "./pages/FoodLog";
 import ExerciseLog from "./pages/ExerciseLog";
@@ -33,6 +34,14 @@ const App = () => (
                   <Profile />
                 </ProtectedRoute>
               } 
+            />
+            <Route
+              path="/profile/view"
+              element={
+                <ProtectedRoute>
+                  <ProfileView />
+                </ProtectedRoute>
+              }
             />
             <Route 
               path="/dashboard" 

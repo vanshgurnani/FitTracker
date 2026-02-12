@@ -1,6 +1,5 @@
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -9,64 +8,57 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import Navigation from "@/components/Navigation";
 import { toast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
-import { supabase, FoodLog as FoodLogType } from "@/lib/supabase";
 import { analyzeFoodDescription } from "@/lib/gemini";
 import { Search, Camera, Utensils, Sparkles, Trash2 } from "lucide-react";
 import { DatePicker } from "@/components/ui/date-picker";
 import { format } from "date-fns";
+import type { FoodLog as FoodLogType, MealType } from "@/lib/types";
+import { createFoodLog, deleteFoodLog, getFoodLogs } from "@/lib/fittrackerApi";
 
 const FoodLog = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [foodDescription, setFoodDescription] = useState("");
-  const [mealType, setMealType] = useState<'breakfast' | 'lunch' | 'dinner' | 'snack'>('breakfast');
+  const [mealType, setMealType] = useState<MealType>("breakfast");
   const [foodLogs, setFoodLogs] = useState<FoodLogType[]>([]);
   const [loadingLogs, setLoadingLogs] = useState(true);
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(new Date());
   
-  const { user } = useAuth();
+  const { token } = useAuth();
 
   const fetchFoodLogsForDate = async (date: Date) => {
-    if (!user) return;
+    if (!token) return;
     
     setLoadingLogs(true);
     try {
-      const startOfDay = format(date, "yyyy-MM-dd") + "T00:00:00.000Z";
-      const endOfDay = format(date, "yyyy-MM-dd") + "T23:59:59.999Z";
-      
-      const { data, error } = await supabase
-        .from('food_logs')
-        .select('*')
-        .eq('user_id', user.id)
-        .gte('created_at', startOfDay)
-        .lt('created_at', endOfDay)
-        .order('created_at', { ascending: false });
+      // Compute start/end of day in the user's local timezone
+      const localStart = new Date(date.getFullYear(), date.getMonth(), date.getDate(), 0, 0, 0, 0);
+      const localEnd = new Date(date.getFullYear(), date.getMonth(), date.getDate(), 23, 59, 59, 999);
+      const startOfDay = localStart.toISOString();
+      const endOfDay = localEnd.toISOString();
 
-      if (error) {
-        console.error('Error fetching food logs:', error);
-        toast({
-          title: "Error loading food logs",
-          description: "Please try again later.",
-          variant: "destructive",
-        });
-      } else {
-        setFoodLogs(data || []);
-      }
+      const logs = await getFoodLogs(token, { startDate: startOfDay, endDate: endOfDay });
+      setFoodLogs(logs);
     } catch (error) {
       console.error('Error fetching food logs:', error);
+      toast({
+        title: "Error loading food logs",
+        description: "Please try again later.",
+        variant: "destructive",
+      });
     } finally {
       setLoadingLogs(false);
     }
   };
 
   useEffect(() => {
-    if (user && selectedDate) {
+    if (token && selectedDate) {
       fetchFoodLogsForDate(selectedDate);
     }
-  }, [user, selectedDate]);
+  }, [token, selectedDate]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!foodDescription.trim() || !user || !selectedDate) return;
+    if (!foodDescription.trim() || !token || !selectedDate) return;
     
     setIsLoading(true);
     
@@ -74,29 +66,18 @@ const FoodLog = () => {
       // Analyze food with Gemini AI
       const analysis = await analyzeFoodDescription(foodDescription);
       
-      // Save to Supabase
-      const { data, error } = await supabase
-        .from('food_logs')
-        .insert({
-          user_id: user.id,
-          description: foodDescription,
-          meal_type: mealType,
-          calories: analysis.calories,
-          protein: analysis.protein,
-          carbs: analysis.carbs,
-          fat: analysis.fat,
-          fiber: analysis.fiber,
-          sugar: analysis.sugar,
-          sodium: analysis.sodium,
-          ai_analysis: analysis.breakdown.join('\n'),
-          created_at: selectedDate.toISOString(), // Use selectedDate for created_at
-        })
-        .select()
-        .single();
-
-      if (error) {
-        throw error;
-      }
+      await createFoodLog(token, {
+        description: foodDescription,
+        mealType,
+        calories: analysis.calories,
+        protein: analysis.protein,
+        carbs: analysis.carbs,
+        fat: analysis.fat,
+        fiber: analysis.fiber,
+        sugar: analysis.sugar,
+        sodium: analysis.sodium,
+        aiAnalysis: analysis.breakdown.join("\n"),
+      });
 
       toast({
         title: "Food logged successfully!",
@@ -121,14 +102,8 @@ const FoodLog = () => {
 
   const handleDeleteLog = async (logId: string) => {
     try {
-      const { error } = await supabase
-        .from('food_logs')
-        .delete()
-        .eq('id', logId);
-
-      if (error) {
-        throw error;
-      }
+      if (!token) return;
+      await deleteFoodLog(token, logId);
 
       // Refresh the food logs to ensure consistency
       if (selectedDate) {
@@ -296,9 +271,9 @@ const FoodLog = () => {
                     <div key={log.id} className="flex items-center justify-between p-4 bg-muted/50 rounded-lg">
                       <div className="flex-1">
                         <div className="flex items-center gap-2 mb-1">
-                          <h3 className="font-medium capitalize">{log.meal_type}</h3>
+                          <h3 className="font-medium capitalize">{log.mealType}</h3>
                           <Badge variant="secondary" className="text-xs">
-                            {new Date(log.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                            {new Date(log.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                           </Badge>
                         </div>
                         <p className="text-sm text-muted-foreground line-clamp-2">{log.description}</p>

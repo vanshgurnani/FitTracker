@@ -9,65 +9,58 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import Navigation from "@/components/Navigation";
 import { toast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
-import { supabase, ExerciseLog as ExerciseLogType } from "@/lib/supabase";
 import { analyzeExerciseDescription } from "@/lib/gemini";
 import { Dumbbell, Heart, Timer, Flame, Sparkles, Trash2 } from "lucide-react";
 import { DatePicker } from "@/components/ui/date-picker";
 import { format } from "date-fns";
+import type { ExerciseIntensity, ExerciseLog as ExerciseLogType } from "@/lib/types";
+import { createExerciseLog, deleteExerciseLog, getExerciseLogs } from "@/lib/fittrackerApi";
 
 const ExerciseLog = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [exerciseDescription, setExerciseDescription] = useState("");
   const [duration, setDuration] = useState("");
-  const [intensity, setIntensity] = useState<'light' | 'moderate' | 'vigorous' | 'high'>('moderate');
+  const [intensity, setIntensity] = useState<ExerciseIntensity>("moderate");
   const [exerciseLogs, setExerciseLogs] = useState<ExerciseLogType[]>([]);
   const [loadingLogs, setLoadingLogs] = useState(true);
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(new Date());
   
-  const { user, userProfile } = useAuth();
+  const { token, userProfile } = useAuth();
 
   const fetchExerciseLogsForDate = async (date: Date) => {
-    if (!user) return;
+    if (!token) return;
     
     setLoadingLogs(true);
     try {
-      const startOfDay = format(date, "yyyy-MM-dd") + "T00:00:00.000Z";
-      const endOfDay = format(date, "yyyy-MM-dd") + "T23:59:59.999Z";
-      
-      const { data, error } = await supabase
-        .from('exercise_logs')
-        .select('*')
-        .eq('user_id', user.id)
-        .gte('created_at', startOfDay)
-        .lt('created_at', endOfDay)
-        .order('created_at', { ascending: false });
+      // Compute start/end of day in the user's local timezone
+      const localStart = new Date(date.getFullYear(), date.getMonth(), date.getDate(), 0, 0, 0, 0);
+      const localEnd = new Date(date.getFullYear(), date.getMonth(), date.getDate(), 23, 59, 59, 999);
+      const startOfDay = localStart.toISOString();
+      const endOfDay = localEnd.toISOString();
 
-      if (error) {
-        console.error('Error fetching exercise logs:', error);
-        toast({
-          title: "Error loading exercise logs",
-          description: "Please try again later.",
-          variant: "destructive",
-        });
-      } else {
-        setExerciseLogs(data || []);
-      }
+      const logs = await getExerciseLogs(token, { startDate: startOfDay, endDate: endOfDay });
+      setExerciseLogs(logs);
     } catch (error) {
       console.error('Error fetching exercise logs:', error);
+      toast({
+        title: "Error loading exercise logs",
+        description: "Please try again later.",
+        variant: "destructive",
+      });
     } finally {
       setLoadingLogs(false);
     }
   };
 
   useEffect(() => {
-    if (user && selectedDate) {
+    if (token && selectedDate) {
       fetchExerciseLogsForDate(selectedDate);
     }
-  }, [user, selectedDate]);
+  }, [token, selectedDate]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!exerciseDescription.trim() || !user || !selectedDate) return;
+    if (!exerciseDescription.trim() || !token || !selectedDate) return;
     
     setIsLoading(true);
     
@@ -82,25 +75,14 @@ const ExerciseLog = () => {
         userWeight
       );
       
-      // Save to Supabase
-      const { data, error } = await supabase
-        .from('exercise_logs')
-        .insert({
-          user_id: user.id,
-          description: exerciseDescription,
-          exercise_type: analysis.exerciseType,
-          duration_minutes: durationNum || 30, // Default to 30 if not specified
-          intensity: analysis.intensity,
-          calories_burned: analysis.caloriesBurned,
-          ai_analysis: analysis.breakdown.join('\n'),
-          created_at: selectedDate.toISOString(), // Use selectedDate for created_at
-        })
-        .select()
-        .single();
-
-      if (error) {
-        throw error;
-      }
+      await createExerciseLog(token, {
+        description: exerciseDescription,
+        exerciseType: analysis.exerciseType,
+        durationMinutes: durationNum || 30,
+        intensity: analysis.intensity,
+        caloriesBurned: analysis.caloriesBurned,
+        aiAnalysis: analysis.breakdown.join("\n"),
+      });
 
       toast({
         title: "Exercise logged successfully!",
@@ -126,14 +108,8 @@ const ExerciseLog = () => {
 
   const handleDeleteLog = async (logId: string) => {
     try {
-      const { error } = await supabase
-        .from('exercise_logs')
-        .delete()
-        .eq('id', logId);
-
-      if (error) {
-        throw error;
-      }
+      if (!token) return;
+      await deleteExerciseLog(token, logId);
 
       // Refresh the exercise logs to ensure consistency
       if (selectedDate) {
@@ -336,26 +312,26 @@ const ExerciseLog = () => {
                       <div key={log.id} className="flex items-center justify-between p-4 bg-muted/50 rounded-lg">
                         <div className="flex items-center gap-3 flex-1">
                           <div className={`p-2 rounded-full ${getIntensityColor(log.intensity)}`}>
-                            {getExerciseIcon(log.exercise_type)}
+                            {getExerciseIcon(log.exerciseType)}
                           </div>
                           <div className="flex-1">
                             <div className="flex items-center gap-2 mb-1">
-                              <h3 className="font-medium capitalize">{log.exercise_type}</h3>
+                              <h3 className="font-medium capitalize">{log.exerciseType}</h3>
                               <Badge variant="secondary" className="text-xs">
-                                {new Date(log.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                {new Date(log.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                               </Badge>
                             </div>
                             <p className="text-sm text-muted-foreground line-clamp-2 mb-1">{log.description}</p>
                             <p className="text-sm text-muted-foreground flex items-center gap-1">
                               <Timer className="h-3 w-3" />
-                              {log.duration_minutes} minutes • {log.intensity} intensity
+                              {log.durationMinutes} minutes • {log.intensity} intensity
                             </p>
                           </div>
                         </div>
                         <div className="flex items-center gap-2">
                           <Badge className="flex items-center gap-1">
                             <Flame className="h-3 w-3" />
-                            {log.calories_burned} cal
+                            {log.caloriesBurned} cal
                           </Badge>
                           <Button
                             variant="ghost"
@@ -375,13 +351,13 @@ const ExerciseLog = () => {
                       <span className="font-medium">Total calories burned for {selectedDate ? format(selectedDate, "PPP") : "today"}:</span>
                       <Badge variant="outline" className="text-lg flex items-center gap-1">
                         <Flame className="h-4 w-4" />
-                        {exerciseLogs.reduce((sum, log) => sum + log.calories_burned, 0)} calories
+                        {exerciseLogs.reduce((sum, log) => sum + log.caloriesBurned, 0)} calories
                       </Badge>
                     </div>
                     {exerciseLogs.length > 0 && (
                       <div className="flex justify-between items-center text-sm text-muted-foreground mt-2">
                         <span>Total duration:</span>
-                        <span>{exerciseLogs.reduce((sum, log) => sum + log.duration_minutes, 0)} minutes</span>
+                        <span>{exerciseLogs.reduce((sum, log) => sum + log.durationMinutes, 0)} minutes</span>
                       </div>
                     )}
                   </div>

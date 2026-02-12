@@ -12,7 +12,8 @@ import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import Navigation from "@/components/Navigation";
 import { useAuth } from "@/contexts/AuthContext";
-import { supabase, FoodLog, ExerciseLog, User } from "@/lib/supabase";
+import type { ExerciseLog, FoodLog, UserProfile } from "@/lib/types";
+import { getExerciseLogs, getFoodLogs } from "@/lib/fittrackerApi";
 import {
   CalendarDays,
   Target,
@@ -33,7 +34,7 @@ const ShareCard = forwardRef<
   HTMLDivElement,
   {
     date: Date | undefined;
-    user: Partial<User> | null;
+    user: Partial<UserProfile> | null;
     stats: {
       consumed: number;
       burned: number;
@@ -69,7 +70,7 @@ const ShareCard = forwardRef<
         <Flame className="h-6 w-6 text-primary" />
       </div>
       <p className="text-muted-foreground mb-1">
-        {user?.full_name ? `${user.full_name}'s Progress` : "My Progress"} for{" "}
+        {user?.fullName ? `${user.fullName}'s Progress` : "My Progress"} for{" "}
         {dateString}
       </p>
       <div className="space-y-3 mt-4">
@@ -128,38 +129,26 @@ const Dashboard = () => {
   );
   const shareCardRef = useRef<HTMLDivElement>(null);
 
-  const { user, userProfile } = useAuth();
+  const { token, userProfile } = useAuth();
 
   const fetchDataForDate = async (date: Date) => {
-    if (!user) return;
+    if (!token) return;
 
     setLoading(true);
     try {
-      const startOfDay = format(date, "yyyy-MM-dd") + "T00:00:00.000Z";
-      const endOfDay = format(date, "yyyy-MM-dd") + "T23:59:59.999Z";
+      // Compute start/end of day in the user's local timezone
+      const localStart = new Date(date.getFullYear(), date.getMonth(), date.getDate(), 0, 0, 0, 0);
+      const localEnd = new Date(date.getFullYear(), date.getMonth(), date.getDate(), 23, 59, 59, 999);
+      const startOfDay = localStart.toISOString();
+      const endOfDay = localEnd.toISOString();
 
-      const { data: foodData, error: foodError } = await supabase
-        .from("food_logs")
-        .select("*")
-        .eq("user_id", user.id)
-        .gte("created_at", startOfDay)
-        .lt("created_at", endOfDay)
-        .order("created_at", { ascending: false });
+      const [foodData, exerciseData] = await Promise.all([
+        getFoodLogs(token, { startDate: startOfDay, endDate: endOfDay }),
+        getExerciseLogs(token, { startDate: startOfDay, endDate: endOfDay }),
+      ]);
 
-      const { data: exerciseData, error: exerciseError } = await supabase
-        .from("exercise_logs")
-        .select("*")
-        .eq("user_id", user.id)
-        .gte("created_at", startOfDay)
-        .lt("created_at", endOfDay)
-        .order("created_at", { ascending: false });
-
-      if (foodError || exerciseError) {
-        console.error("Error fetching data:", foodError || exerciseError);
-      } else {
-        setFoodLogs(foodData || []);
-        setExerciseLogs(exerciseData || []);
-      }
+      setFoodLogs(foodData || []);
+      setExerciseLogs(exerciseData || []);
     } catch (error) {
       console.error("Error fetching dashboard data:", error);
     } finally {
@@ -171,12 +160,12 @@ const Dashboard = () => {
     if (selectedDate) {
       fetchDataForDate(selectedDate);
     }
-  }, [user, selectedDate]);
+  }, [token, selectedDate]);
 
-  const dailyGoal = userProfile?.daily_calorie_goal || 2000;
+  const dailyGoal = userProfile?.dailyCaloricGoal || 2000;
   const consumed = foodLogs.reduce((sum, log) => sum + log.calories, 0);
   const burned = exerciseLogs.reduce(
-    (sum, log) => sum + log.calories_burned,
+    (sum, log) => sum + log.caloriesBurned,
     0
   );
   const netCalories = consumed - burned;
@@ -208,7 +197,7 @@ const Dashboard = () => {
   ]
     .sort(
       (a, b) =>
-        new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
     )
     .slice(0, 5);
 
@@ -302,7 +291,7 @@ const Dashboard = () => {
           <div>
             <h1 className="text-3xl font-bold mb-2">
               Welcome back
-              {userProfile?.full_name ? `, ${userProfile.full_name}` : ""}!
+              {userProfile?.fullName ? `, ${userProfile.fullName}` : ""}!
             </h1>
             <p className="text-muted-foreground">
               Here's your fitness progress for{" "}
@@ -507,27 +496,25 @@ const Dashboard = () => {
                                 {activity.type === "food" ? (
                                   <>
                                     <span className="capitalize">
-                                      {(activity as FoodLog).meal_type}
+                                      {(activity as FoodLog).mealType}
                                     </span>{" "}
                                     • {(activity as FoodLog).calories} calories
                                   </>
                                 ) : (
                                   <>
                                     <span className="capitalize">
-                                      {(activity as ExerciseLog).exercise_type}
+                                      {(activity as ExerciseLog).exerciseType}
                                     </span>{" "}
                                     •{" "}
-                                    {(activity as ExerciseLog)
-                                      .calories_burned}{" "}
+                                    {(activity as ExerciseLog).caloriesBurned}{" "}
                                     calories burned
-                                    {(activity as ExerciseLog)
-                                      .duration_minutes && (
+                                    {(activity as ExerciseLog).durationMinutes && (
                                       <>
                                         {" "}
                                         •{" "}
                                         {
                                           (activity as ExerciseLog)
-                                            .duration_minutes
+                                            .durationMinutes
                                         }{" "}
                                         min
                                       </>
@@ -538,7 +525,7 @@ const Dashboard = () => {
                             </div>
                           </div>
                           <Badge variant="secondary">
-                            {new Date(activity.created_at).toLocaleTimeString(
+                            {new Date(activity.createdAt).toLocaleTimeString(
                               [],
                               {
                                 hour: "2-digit",
